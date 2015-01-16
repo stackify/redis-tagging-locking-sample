@@ -1,0 +1,6 @@
+src/RedisWithTaggingAndLocking/obj/
+src/RedisWithTaggingAndLockingTests/bin/
+src/RedisWithTaggingAndLockingTests/obj/
+src/RedisWithTaggingAndLocking/bin/
+src/DistributedLockingPerMethod/bin/
+src/DistributedLockingPerMethod/obj/

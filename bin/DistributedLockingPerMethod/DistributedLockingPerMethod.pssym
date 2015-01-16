@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Symbols xmlns="http://schemas.postsharp.org/2.0/symbols">
+  <Class Class="#1=T:[DistributedLockingPerMethod]DistributedLockingPerMethod.MethodMutex">
+    <Instance Declaration="#2=M:[DistributedLockingPerMethod]DistributedLockingPerMethod.WorkerInstance::DoWork()" Id="a997b684802cbf80">
+      <Target>
+        <JoinPoint Description="#3=Intercepted by OnInvoke" />
+      </Target>
+    </Instance>
+  </Class>
+</Symbols>

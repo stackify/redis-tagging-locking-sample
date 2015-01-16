@@ -5,15 +5,18 @@ Sample code to use Redis as a tagging cache and Distributed Lock Manager.
 
 ## Usage
 
+Run multiple instances of the *DistributedLockingPerMethod* console app to see a simulation of Redis as a distributed lock manager.
 Examine the tests in *RedisWithTaggingAndLockingTests* and run them using your favorite test runner for examples of how to consume the Tagging and Locking extensions.
 
 ## Notes
 
 This project is intended to give a general idea of how tagging and DLM can be accomplished with Redis and .NET. Many specific functions (Removing cache entries by tag) have not been included in this sample, but could be easily accomplished with modified versions of the included C# code and Lua scripts.  
+If you do not wish to install the PostSharp extension in Visual Studio, you can find a pre-compiled version of DistributedLockingPerMethod.exe in the top level "bin" folder.
+Be sure to update the connection info for your Redis server!
 
 ## Dependencies
 
-ServiceStack.Redis 4.0.33, NUnit 2.6.3
+ServiceStack.Redis 4.0.33, NUnit 2.6.3, PostSharp 4.0.39, PostSharp Visual Studio Extension*
 
 ## License
 

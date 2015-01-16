@@ -94,7 +94,7 @@ namespace RedisWithTaggingAndLocking
                     tx.Commit();
                 }
             }
-            catch (Exception ex)
+            catch
             {
                 // log but don't throw
             }
