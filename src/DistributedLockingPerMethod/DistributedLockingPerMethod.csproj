@@ -64,7 +64,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CacheObj.cs" />
+    <Compile Include="MethodTrackerDto.cs" />
     <Compile Include="MethodMutex.cs" />
     <Compile Include="MethodMutexWithFrequency.cs" />
     <Compile Include="Program.cs" />

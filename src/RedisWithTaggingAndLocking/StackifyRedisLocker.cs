@@ -20,9 +20,13 @@ namespace RedisWithTaggingAndLocking
         public static readonly TimeSpan DefaultLockAcquisitionTimeout = TimeSpan.FromSeconds(30);
         public static readonly TimeSpan DefaultLockMaxAge = TimeSpan.FromHours(2);
 
-        // ReSharper disable once MemberHidesStaticFromOuterClass
-  //      private static readonly ILog Log = LogManager.GetLogger(typeof(KnockLock));
-        private const string LockPrefix = "knocksyscachelock:";
+        // namespace isolating the storage of lock metadata; should always have a value.
+        private const string LockPrefix = "syscachelock:";
+
+        // populate ValuePrefix to privately isolate your locked values in a namespace
+        // so that they aren't mistakenly (or intentionally) accessed directly by callers
+        // without going through the locking protections.
+        private const string ValuePrefix = "";  
 
         #endregion
 
@@ -31,6 +35,7 @@ namespace RedisWithTaggingAndLocking
         private readonly IRedisClient _client;
         // BUG?: don't use the _client member except in Dispose, and only within try/catch
 
+        private readonly string _rawKey;
         private readonly string _valueKey;
         private readonly string _lockKey;
         private string _lockValue;
@@ -54,10 +59,11 @@ namespace RedisWithTaggingAndLocking
             TimeSpan? acquisitionTimeOut = null)
         {
             _client = redisClient;
-            _valueKey = key;
+            _rawKey = key;
+            _valueKey = ValuePrefix + key;
             _lockKey = LockPrefix + key;
             var lockSpinTime = acquisitionTimeOut ?? DefaultLockAcquisitionTimeout;
-
+            
             _acquired = RetryUntilTrue(
                 () =>
                 {
@@ -104,13 +110,14 @@ namespace RedisWithTaggingAndLocking
             get { return _disposed == 1; }
         }
 
-
         /// <summary>
         /// True if the lock has already been explicitly released, or if it has determined that another client has superceded this lock.
         /// </summary>
         public bool IsReleased { get; private set; }
 
         public bool IsAcquired { get { return _acquired; } }
+
+        public string Key { get { return _rawKey; } }
 
         #endregion
 
@@ -294,7 +301,7 @@ namespace RedisWithTaggingAndLocking
             IsReleased = true;  // permanent condition, mark lock released
             var deltaMs = retrievedNumeric - thisLockGoodThrough;
             throw new LockExpiredException(
-                String.Format("Attempted access to lock was accessed when expired and held by a lock {0}ms newer.",
+                String.Format("Attempted access to lock {1} when expired and held by a lock {0}ms newer.",
                     deltaMs, ToString()), _valueKey, this);
 
         }
@@ -317,7 +324,9 @@ namespace RedisWithTaggingAndLocking
             return (value == _lockValue);
         }
 
-        private static bool RetryUntilTrue(Func<bool> action, TimeSpan? timeOut)
+        // Use these instead of the ServiceStack implementation, because they guarantee that your
+        // action will be called at least once, even if timeOut == TimeSpan.Zero
+        private static bool RetryUntilTrue(Func<bool> action, TimeSpan timeOut)
         {
             var i = 0;
             var firstAttempt = DateTime.UtcNow;
@@ -330,7 +339,7 @@ namespace RedisWithTaggingAndLocking
                     return true;
                 }
                 SleepBackOffMultiplier(i);
-            } while (timeOut == null || DateTime.UtcNow - firstAttempt < timeOut.Value);
+            } while (DateTime.UtcNow - firstAttempt < timeOut);
 
             return false;
         }
@@ -386,6 +395,7 @@ namespace RedisWithTaggingAndLocking
                 //Log.Error(String.Format("An error occurred while cleaning up {0}.", ToString()), ex);
             }
         }
+
         #endregion
     }
 

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.Caching;
 using System.Text;
 using System.Threading.Tasks;
 using PostSharp.Aspects;
@@ -49,13 +48,13 @@ namespace DistributedLockingPerMethod
             string key = DeriveCacheKey(args);
             _redisConnStr = ConfigurationManager.AppSettings["redisConnStr"];
 
-            LockResult<CacheObj> lockResult = new LockResult<CacheObj>();
+            LockResult<MethodTrackerDto> lockResult = new LockResult<MethodTrackerDto>();
 
             try
             {
                 using (var client = new RedisClient(_redisConnStr))
                 {
-                    lockResult = TryGetLock<CacheObj>(client, key, _maxMethodLockTime, TimeSpan.FromSeconds(2));
+                    lockResult = TryGetLock<MethodTrackerDto>(client, key, _maxMethodLockTime, TimeSpan.FromSeconds(2));
 
                     if (!lockResult.Acquired)
                     {
