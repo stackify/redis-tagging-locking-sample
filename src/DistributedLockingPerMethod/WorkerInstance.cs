@@ -5,7 +5,7 @@ namespace DistributedLockingPerMethod
 {
     public class WorkerInstance
     {
-        [MethodMutex(10)]
+        [MethodMutexWithFrequency(10, 60)]
         public bool DoWork()
         {
             int workDurationSeconds = 5; // set this above the # of seconds passed to MethodMutex to explore what happens if the lock expires

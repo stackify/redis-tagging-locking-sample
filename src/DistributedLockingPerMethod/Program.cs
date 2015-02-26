@@ -22,6 +22,14 @@ namespace DistributedLockingPerMethod
 
         public static void Main()
         {
+            WorkerInstance worker2 = new WorkerInstance();
+
+            while (true)
+            {
+                Console.WriteLine(worker2.DoWork());
+                System.Threading.Thread.Sleep(1000);
+            }
+
 
             Process thisInstance = Process.GetCurrentProcess();
             Process[] allInstances = Process.GetProcessesByName(thisInstance.ProcessName);
@@ -54,6 +62,7 @@ namespace DistributedLockingPerMethod
                 {
                     Thread.Sleep(500);
                     gotWorkDone = worker.DoWork();
+                    Console.WriteLine("gotWorkDone: " + gotWorkDone);
                 } while (!gotWorkDone && time.Elapsed < TimeSpan.FromMinutes(1));
                 time.Stop();
 

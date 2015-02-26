@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.Caching;
 using System.Text;
 using System.Threading.Tasks;
 using PostSharp.Aspects;
@@ -16,11 +15,11 @@ namespace DistributedLockingPerMethod
     public class MethodMutex : MethodInterceptionAspect
     {
         // initialized at compile time then serialized.
-        private readonly TimeSpan _maxMethodLockTime; 
+        protected TimeSpan _maxMethodLockTime; 
         private Type _returnType;
         
         // not intialized until runtime.
-        private string _redisConnStr;
+        protected string _redisConnStr;
 
         public MethodMutex(int maxMethodLockTime = 60)
         {
@@ -49,61 +48,55 @@ namespace DistributedLockingPerMethod
             string key = DeriveCacheKey(args);
             _redisConnStr = ConfigurationManager.AppSettings["redisConnStr"];
 
-            // check locally to avoid the network round trip if we already know it's locked.
-            bool locallyLocked = CheckForLocalMutex(key);
-            if (locallyLocked)
+            LockResult<MethodTrackerDto> lockResult = new LockResult<MethodTrackerDto>();
+
+            try
             {
+                using (var client = new RedisClient(_redisConnStr))
+                {
+                    lockResult = TryGetLock<MethodTrackerDto>(client, key, _maxMethodLockTime, TimeSpan.FromSeconds(2));
+
+                    if (!lockResult.Acquired)
+                    {
+                        ReturnWithoutRunning(args);
+                    }
+                    else
+                    {
+                        RunMethod(args);
+                    }
+
+                    //clear the lock
+                    if (lockResult.Handle != null)
+                    {
+                        lockResult.Handle.Handle.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.ToString());
                 ReturnWithoutRunning(args);
-                return;
             }
-
-            // attempt to acquire lock from redis
-            IDisposable distLock = AcquireLock(key, _maxMethodLockTime);
-            if (distLock == null)
-            {
-                ReturnWithoutRunning(args);   // couldn't acquire, method is already running somewhere.
-                return;
-            }
-
-            RunMethod(args);        // we hold the mutex, so run the method.
-            ReleaseLock(key, distLock);  // and finally, release the lock
         }
 
-        private IDisposable AcquireLock(string key, TimeSpan lockLifespan)
+
+        protected LockResult<TSource> TryGetLock<TSource>(RedisClient client, string key, TimeSpan lockAgeTimeout, TimeSpan lockAcquisitionTimeout = new TimeSpan())
         {
-            using (var client = new RedisClient(_redisConnStr))
+
+            var dlmLock = client.AcquireDlmLock(key, lockAcquisitionTimeout, lockAgeTimeout);
+
+            if (!dlmLock.IsAcquired)
             {
-                try
-                {
-                    var lockAcquisitionTimeout = TimeSpan.FromMilliseconds(100);
-                    
-                    // get the lock using the extension method from RedisWithTaggingAndLocking
-                    var redisLock = client.AcquireDlmLock(key, lockAcquisitionTimeout, lockLifespan);
-                    
-                    // store in local cache
-                    MemoryCache.Default.Set(key, redisLock.ToString(), DateTimeOffset.UtcNow.Add(lockLifespan));
-                    return redisLock;
-                }
-                catch (TimeoutException)
-                {
-                    // couldn't acquire the lock within specified (100ms) time.
-                    return null;
-                }
+                return LockResult<TSource>.Fail(key);
             }
+
+            var value = dlmLock.GetValue<TSource>(client);
+
+            return new LockResult<TSource>(key, true, new LockHandleWrapper(key, dlmLock), value);
+
         }
 
-        private void ReleaseLock(string key, IDisposable distributedLock)
-        {
-            string expectedValue = distributedLock.ToString();
-            string localItem = MemoryCache.Default.Get(key) as string;
-            Debug.Assert(localItem != null && localItem == expectedValue);  // if your work can run longer than your mutex times, except here, or you could release another instances lock.
-
-            // In a real app, you would probably want native lock() statements around MemoryCache access
-            MemoryCache.Default.Remove(key);
-            distributedLock.Dispose();
-        }
-
-        private void RunMethod(MethodInterceptionArgs args)
+        protected void RunMethod(MethodInterceptionArgs args)
         {
             try
             {
@@ -115,7 +108,7 @@ namespace DistributedLockingPerMethod
             }
         }
 
-        private void ReturnWithoutRunning(MethodInterceptionArgs args)
+        protected void ReturnWithoutRunning(MethodInterceptionArgs args)
         {
             if (_returnType == typeof (bool))
             {
@@ -127,13 +120,8 @@ namespace DistributedLockingPerMethod
             }
         }
 
-        private bool CheckForLocalMutex(string key)
-        {
-            var localLock = MemoryCache.Default.Get(key) as string;
-            return localLock != null;
-        }
 
-        private static string DeriveCacheKey(MethodInterceptionArgs intercepted)
+        protected static string DeriveCacheKey(MethodInterceptionArgs intercepted)
         {
             var method = intercepted.Method;
             var arguments = intercepted.Arguments;
@@ -155,7 +143,7 @@ namespace DistributedLockingPerMethod
                 }
             }
 
-            var stringBuilder = new StringBuilder(methodName);
+            var stringBuilder = new StringBuilder("Mutex-" + methodName);
             stringBuilder.Append('(');
 
             for (int i = 0; i < argStrings.Count; i++)
